@@ -9,25 +9,39 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('purchases', function (Blueprint $table) {
+
             $table->id();
-            $table->string('invoice_number', 50)->unique();
-            $table->unsignedBigInteger('user_id');
-            $table->decimal('usd_amount', 16, 2);
-            $table->decimal('discount_amount_usd', 16, 2)->default(0.00);
-            $table->decimal('final_usd_payable', 16, 2);
-            $table->decimal('mind_price_usd', 16, 8);
-            $table->decimal('base_mind_purchased', 24, 8);
-            $table->decimal('tier_bonus_percentage', 5, 2)->default(0.00);
-            $table->decimal('tier_bonus_mind', 24, 8)->default(0.00000000);
-            $table->unsignedBigInteger('coupon_id')->nullable();
-            $table->decimal('coupon_bonus_mind', 24, 8)->default(0.00000000);
-            $table->decimal('total_mind_credited', 24, 8);
-            $table->enum('status', ['pending','completed','failed','cancelled',])->default('pending');
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->string('invoice_id')->nullable()->unique();
+            $table->string('payment_address')->nullable();
+            $table->string('coupon_code')->nullable();
+            $table->decimal('usdt_amount', 24, 8);
+            $table->decimal('payable_usdt', 24, 8)->nullable();
+            $table->decimal('received_usdt', 24, 8)->nullable();
+            $table->decimal('mind_price', 24, 8);
+            $table->decimal('mind_amount', 24, 8);
+            $table->decimal('bonus_percentage', 10, 4)->default(0);
+            $table->decimal('bonus_mind', 24, 8)->default(0);
+            $table->decimal('total_mind', 24, 8);
+            $table->unsignedInteger('slot')->nullable();
+            $table->string('tx_hash')->nullable()->index();
+            $table->enum('status', ['pending','processing','completed','failed','expired',])->default('pending')->index();
+
+            $table->timestamp('paid_at')
+                ->nullable();
+
+            $table->timestamp('completed_at')
+                ->nullable();
+
+            $table->text('failure_reason')
+                ->nullable();
+
             $table->timestamps();
-            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
-            $table->foreign('coupon_id')->references('id')->on('coupons')->nullOnDelete();
-            $table->index(['user_id', 'status']);
-            $table->index('coupon_id');
+
+            $table->index([
+                'user_id',
+                'status',
+            ]);
         });
     }
 

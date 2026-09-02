@@ -230,4 +230,13 @@ return [
 
     'serialization' => 'json',
 
+
+    'blockmaster' => [
+        'url' => env('API_URL','https://evm.blockmaster.info'),
+        'merchant_id' => env('MERCHANT_ID'),
+        'merchant_secret' => env('MERCHANT_SECRET'),
+    ],
+
 ];
+
+
