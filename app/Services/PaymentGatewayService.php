@@ -105,7 +105,7 @@ class PaymentGatewayService
         return Http::timeout(30)
             ->acceptJson()
             ->post(
-                $this->url . '/api/v1/invoice/create',
+                $this->url . '/api/v1/create-invoice',
                 $payload
             );
     }
