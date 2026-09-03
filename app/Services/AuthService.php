@@ -32,14 +32,9 @@ class AuthService
                 }
 
                 do {
-                    $referralCode = strtoupper(
-                        Str::random(8)
-                    );
+                    $referralCode = strtoupper(Str::random(8));
                 } while (
-                    User::where(
-                        'referral_code',
-                        $referralCode
-                    )->exists()
+                    User::where('referral_code', $referralCode)->exists()
                 );
 
                 $user = User::create([
@@ -51,12 +46,16 @@ class AuthService
                     'mind_balance' => 0,
                 ]);
 
-                $token = $user->createToken(
-                    'user-api'
-                )->plainTextToken;
+                $token = $user->createToken('user-api')->plainTextToken;
 
                 return [
-                    'user' => $user,
+                    'user' => [
+                        'id' => $user->id,
+                        'wallet_address' => $user->wallet_address,
+                        'referral_code' => $user->referral_code,
+                        'referred_id' => $user->referred_id,
+                        'role' => $user->role,
+                    ],
                     'token' => $token,
                 ];
             });
@@ -127,7 +126,7 @@ class AuthService
             )->plainTextToken;
 
             return [
-                'user' => $user,
+                // 'user' => $user,
                 'token' => $token,
             ];
 

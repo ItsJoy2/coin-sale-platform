@@ -45,45 +45,13 @@ class PurchaseController extends Controller
 
                 'data' => [
 
-                    'purchase_id' =>
-                        $purchase->id,
-
-                    'invoice_id' =>
-                        $purchase->invoice_id,
-
-                    'payment_address' =>
-                        $purchase->payment_address,
-
-                    'coupon_code' =>
-                        $purchase->coupon_code,
-
-                    'usdt_amount' =>
-                        $purchase->usdt_amount,
-
-                    'payable_usdt' =>
-                        $purchase->payable_usdt,
-
-                    'mind_price' =>
-                        $purchase->mind_price,
-
-                    'mind_amount' =>
-                        $purchase->mind_amount,
-
-                    'bonus_percentage' =>
-                        $purchase->bonus_percentage,
-
-                    'bonus_mind' =>
-                        $purchase->bonus_mind,
-
-                    'total_mind' =>
-                        $purchase->total_mind,
-
-                    'slot' =>
-                        $purchase->slot,
-
-                    'status' =>
-                        $purchase->status,
-                ],
+                        'purchase_id' => $purchase->id,
+                        'invoice_id' => $purchase->invoice_id,
+                        'payment_address' => $purchase->payment_address,
+                        'coupon_code' => $purchase->coupon_code,
+                        'status' => $purchase->status,
+                        'created_at' => $purchase->created_at,
+            ],
             ], 201);
 
         } catch (ValidationException $e) {

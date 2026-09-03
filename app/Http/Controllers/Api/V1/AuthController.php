@@ -157,4 +157,29 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+    public function profile(Request $request)
+    {
+        try {
+
+            $user = $request->user();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile retrieved successfully.',
+                'data' => [
+                    'user' => $user,
+                ],
+            ], 200);
+
+        } catch (Throwable $e) {
+
+            report($e);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Something went wrong. Please try again later.'
+            ], 500);
+        }
+    }
 }

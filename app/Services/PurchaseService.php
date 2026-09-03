@@ -450,11 +450,8 @@ class PurchaseService
             */
 
             $purchase->update([
-                'invoice_id' =>
-                    $invoiceId,
-
-                'payment_address' =>
-                    $paymentAddress,
+                'invoice_id' =>$invoiceId,
+                'payment_address' =>$paymentAddress,
             ]);
 
             return $purchase->fresh();
