@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\PurchaseService;
+use App\Models\Coupon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -83,6 +84,66 @@ class PurchaseController extends Controller
 
                 // 'message' =>
                 //     'Something went wrong. Please try again later.',
+            ], 500);
+        }
+    }
+
+    public function validateCoupon(Request $request)
+    {
+        try {
+
+            $validated = $request->validate([
+                'coupon_code' => ['required','string','max:50'],
+            ]);
+
+            $couponCode = strtoupper(
+                trim($validated['coupon_code'])
+            );
+
+            $coupon = Coupon::query()
+                ->whereRaw('UPPER(code) = ?',[$couponCode])
+                ->first();
+
+            if (!$coupon) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Invalid coupon code.',
+                ], 404);
+            }
+
+
+            if (!$coupon->isValid()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'This coupon is expired, inactive, or has reached its usage limit.',
+                ], 422);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Coupon is valid.',
+                'data' => [
+                    'coupon_code' => $coupon->code,
+                    'discount_percentage' => $coupon->discount_percentage,
+                ],
+            ]);
+
+        } catch (ValidationException $e) {
+
+            throw $e;
+
+        } catch (Throwable $e) {
+
+            Log::error('Coupon Validation Error', [
+                'coupon_code' => $request->input('coupon_code'),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to validate coupon.',
             ], 500);
         }
     }

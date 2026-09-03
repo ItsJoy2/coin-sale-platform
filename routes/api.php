@@ -30,6 +30,8 @@ Route::prefix('v1')->group(function () {
 
     Route::get('settings',[SettingController::class, 'index']);
 
+    Route::post('coupon/validate', [PurchaseController::class, 'validateCoupon']);
+    
     Route::post('webhook',[WebhookController::class, 'handle']
     );
 });
