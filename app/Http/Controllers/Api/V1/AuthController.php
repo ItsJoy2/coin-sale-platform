@@ -25,7 +25,7 @@ class AuthController extends Controller
             $validated = $request->validate([
                 'wallet_address' => ['required','string','regex:/^0x[a-fA-F0-9]{40}$/','unique:users,wallet_address',],
                 'password' => ['required','string','min:8','confirmed'],
-                'referral_code' => ['nullable', 'string', 'exists:users, referral_code']
+                'referral_code' => ['nullable', 'string', 'exists:users,referral_code']
             ]);
 
             $result = $this->authService->register($validated);
