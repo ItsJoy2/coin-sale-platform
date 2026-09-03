@@ -382,13 +382,13 @@ class PurchaseService
                     $gatewayPayload
                 );
 
-                Log::info('Blockmaster Create Invoice Response', [
-    'http_status' => $response->status(),
-    'successful' => $response->successful(),
-    'body' => $response->body(),
-    'json' => $response->json(),
-    'payload' => $gatewayPayload,
-]);
+                // Log::info('Blockmaster Create Invoice Response', [
+                //     'http_status' => $response->status(),
+                //     'successful' => $response->successful(),
+                //     'body' => $response->body(),
+                //     'json' => $response->json(),
+                //     'payload' => $gatewayPayload,
+                // ]);
 
             if (!$response->successful()) {
 
