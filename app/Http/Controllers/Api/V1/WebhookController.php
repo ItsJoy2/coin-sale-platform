@@ -22,7 +22,6 @@ class WebhookController extends Controller
             $invoiceId = $request->input('invoice_id');
             $txHash = $request->input('txHash');
 
-            // user_id URL query থেকে আসবে
             $userId = $request->query('user_id');
 
             if (!$invoiceId || !$txHash) {
