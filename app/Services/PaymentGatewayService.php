@@ -14,15 +14,15 @@ class PaymentGatewayService
     public function __construct()
     {
         $this->url = rtrim(
-            config('services.blockmaster.url'),
+            config('services.geteway.url'),
             '/'
         );
 
         $this->merchantId =
-            config('services.blockmaster.merchant_id');
+            config('services.geteway.merchant_id');
 
         $this->merchantSecret =
-            config('services.blockmaster.merchant_secret');
+            config('services.geteway.merchant_secret');
     }
 
     /**

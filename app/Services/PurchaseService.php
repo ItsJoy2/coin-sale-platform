@@ -112,25 +112,21 @@ class PurchaseService
             |--------------------------------------------------------------------------
             */
 
-            $mindPrice = $this->settings->get(
-                'mind_price'
-            );
+            $mindPrice = $this->settings->get('mind_price');
 
-            if (
-                $mindPrice === null ||
-                bccomp((string) $mindPrice, '0', 8) <= 0
-            ) {
+            if ($mindPrice === null || !is_numeric($mindPrice)) {
                 throw new RuntimeException(
                     'MIND price is not configured.'
                 );
             }
 
-            $mindPrice = bcadd(
-                (string) $mindPrice,
-                '0',
-                8
-            );
+            $mindPrice = (string) $mindPrice;
 
+            if ((float) $mindPrice <= 0) {
+                throw new RuntimeException(
+                    'MIND price is not configured.'
+                );
+            }
             /*
             |--------------------------------------------------------------------------
             | Coupon
@@ -269,28 +265,18 @@ class PurchaseService
             |--------------------------------------------------------------------------
             */
 
-            $usdtConfig = $this->settings->get(
-                'USDT',
-                []
-            );
+            $usdtConfig = $this->settings->get('USDT', []);
 
             if (!is_array($usdtConfig)) {
-                throw new RuntimeException(
-                    'USDT configuration is invalid.'
-                );
+                throw new RuntimeException('USDT configuration is invalid.');
             }
 
             $chainId = $usdtConfig['chain_id'] ?? null;
-
-            $contractAddress =
-                $usdtConfig['contract_address'] ?? null;
+            $contractAddress = $usdtConfig['contract_address'] ?? null;
 
             if (!$chainId || !$contractAddress) {
-                throw new RuntimeException(
-                    'USDT configuration is incomplete.'
-                );
+                throw new RuntimeException('USDT configuration is incomplete.');
             }
-
             /*
             |--------------------------------------------------------------------------
             | Create Purchase
@@ -354,7 +340,7 @@ class PurchaseService
             */
 
             $webhookUrl =
-                url('/api/v1/purchase/webhook') .
+                url('/api/v1/webhook') .
                 '?' .
                 http_build_query([
                     'user_id' => $user->id,

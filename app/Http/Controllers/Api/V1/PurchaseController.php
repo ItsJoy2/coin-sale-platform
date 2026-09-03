@@ -24,17 +24,8 @@ class PurchaseController extends Controller
         try {
 
             $validated = $request->validate([
-                'usdt_amount' => [
-                    'required',
-                    'numeric',
-                    'gt:0',
-                ],
-
-                'coupon_code' => [
-                    'nullable',
-                    'string',
-                    'max:50',
-                ],
+                'usdt_amount' => ['required','numeric','gt:0',],
+                'coupon_code' => ['nullable','string','max:50',],
             ]);
 
             $user = $request->user();
@@ -120,9 +111,10 @@ class PurchaseController extends Controller
 
             return response()->json([
                 'status' => false,
+                'message' => $e->getMessage(),
 
-                'message' =>
-                    'Something went wrong. Please try again later.',
+                // 'message' =>
+                //     'Something went wrong. Please try again later.',
             ], 500);
         }
     }

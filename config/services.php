@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'geteway' => [
+    'url' => env('API_URL'),
+    'merchant_id' => env('MERCHANT_ID'),
+    'merchant_secret' => env('MERCHANT_SECRET'),
+],
+
 ];
