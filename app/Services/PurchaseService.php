@@ -481,320 +481,292 @@ class PurchaseService
         string $txHash,
         int $userId
     ): array {
-
         $txHash = trim($txHash);
 
-        $purchase = Purchase::query()
-            ->where('user_id', $userId)
-            ->whereNotNull('invoice_id')
-            ->where('status', 'pending')
-            ->orderByDesc('id')
-            ->first();
-
-
-        if (!$purchase) {
-
-            Log::warning('Webhook Purchase Not Found', [
-                'user_id' => $userId,
-                'tx_hash' => $txHash,
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Pending purchase not found.',
-            ];
+        if ($txHash === '') {
+            throw new RuntimeException('Transaction hash is required.');
         }
 
-        if ($purchase->status === 'completed') {
+        /*
+        |--------------------------------------------------------------------------
+        | 1. Check payment from Gateway
+        |--------------------------------------------------------------------------
+        */
 
-            return [
-                'status'  => true,
-                'message' => 'Payment already processed.',
-                'data' => [
-                    'purchase_id' => $purchase->id,
-                    'user_id'     => $purchase->user_id,
-                    'invoice_id'  => $purchase->invoice_id,
-                    'tx_hash'     => $purchase->tx_hash,
-                    'status'      => $purchase->status,
-                ],
-            ];
-        }
+        $params = PaymentGatewayService::auth([
+            'txHash' => $txHash,
+        ]);
 
-        $invoiceId = trim((string) $purchase->invoice_id);
+        $response = PaymentGatewayService::client()->get(
+            rtrim(config('payment_gateway.api_url'), '/')
+                . "/api/v1/payments/{$txHash}",
+            $params
+        );
 
-
-        if (!$invoiceId) {
-
-            Log::error('Purchase Invoice ID Missing', [
-                'purchase_id' => $purchase->id,
-                'user_id'     => $userId,
-                'tx_hash'     => $txHash,
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Purchase invoice ID is missing.',
-            ];
-        }
-
-        try {
-
-            $params = PaymentGatewayService::auth([
-                'txHash' => $txHash,
-            ]);
-
-
-            $response = PaymentGatewayService::client()->get(
-                rtrim(config('payment_gateway.api_url'), '/')
-                    . "/api/v1/payments/{$txHash}",
-                $params
-            );
-
-        } catch (Throwable $e) {
-
-            Log::error('Webhook Payment Check Exception', [
-                'purchase_id' => $purchase->id,
-                'user_id'     => $userId,
-                'invoice_id'  => $invoiceId,
-                'tx_hash'     => $txHash,
-                'message'     => $e->getMessage(),
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Unable to verify payment.',
-            ];
-        }
-
-        Log::info('Purchase Webhook Gateway Response', [
-            'purchase_id' => $purchase->id,
-            'user_id'     => $userId,
-            'invoice_id'  => $invoiceId,
-            'tx_hash'     => $txHash,
+        Log::info('Purchase webhook gateway response', [
+            'user_id' => $userId,
+            'tx_hash' => $txHash,
             'http_status' => $response->status(),
-            'body'        => $response->body(),
-            'json'        => $response->json(),
+            'response' => $response->json(),
+            'raw_body' => $response->body(),
         ]);
 
         if (!$response->successful()) {
-
-            Log::error('Purchase Webhook Gateway Request Failed', [
-                'purchase_id' => $purchase->id,
-                'user_id'     => $userId,
-                'invoice_id'  => $invoiceId,
-                'tx_hash'     => $txHash,
-                'http_status' => $response->status(),
-                'body'        => $response->body(),
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Unable to verify payment.',
-            ];
+            throw new RuntimeException(
+                'Gateway payment check failed: ' . $response->body()
+            );
         }
 
         $payment = $response->json();
 
-
-        if (!is_array($payment)) {
-
-            return [
-                'status'  => false,
-                'message' => 'Invalid payment gateway response.',
-            ];
-        }
+        /*
+        |--------------------------------------------------------------------------
+        | 2. Validate Gateway Response
+        |--------------------------------------------------------------------------
+        */
 
         if (($payment['status'] ?? false) !== true) {
-
-            return [
-                'status'  => false,
-                'message' =>
-                    $payment['message']
-                    ?? 'Invalid payment response.',
-            ];
+            throw new RuntimeException(
+                $payment['message'] ?? 'Invalid payment response.'
+            );
         }
 
-        $gatewayInvoiceId = $payment['invoice_id'] ?? null;
+        $gatewayInvoiceId = trim(
+            (string) ($payment['invoice_id'] ?? '')
+        );
 
         $paymentStatus = strtolower(
             trim((string) ($payment['payment_status'] ?? ''))
         );
 
-        $receivedAmount = $payment['amount'] ?? null;
+        $gatewayAmount = $payment['amount'] ?? null;
 
-        $token = $payment['token'] ?? null;
+        $gatewayToken = strtoupper(
+            trim((string) ($payment['token'] ?? ''))
+        );
 
-        if (!$gatewayInvoiceId) {
-
-            Log::error('Gateway Invoice ID Missing', [
-                'purchase_id' => $purchase->id,
-                'user_id'     => $userId,
-                'tx_hash'     => $txHash,
-                'gateway_response' => $payment,
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Invoice ID not found in payment response.',
-            ];
+        if ($gatewayInvoiceId === '') {
+            throw new RuntimeException(
+                'Invoice ID not found in gateway response.'
+            );
         }
 
-        if ((string) $gatewayInvoiceId !== (string) $invoiceId) {
-
-            Log::warning('Webhook Invoice Mismatch', [
-                'purchase_id'       => $purchase->id,
-                'user_id'           => $userId,
-                'purchase_invoice'  => $invoiceId,
-                'gateway_invoice'   => $gatewayInvoiceId,
-                'tx_hash'           => $txHash,
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Invoice ID mismatch.',
-            ];
+        if ($gatewayAmount === null || $gatewayAmount === '') {
+            throw new RuntimeException(
+                'Payment amount not found in gateway response.'
+            );
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3. Payment must be completed
+        |--------------------------------------------------------------------------
+        */
 
         if ($paymentStatus !== 'completed') {
-
-            Log::info('Payment Not Completed Yet', [
-                'purchase_id'    => $purchase->id,
-                'user_id'        => $userId,
-                'invoice_id'     => $invoiceId,
-                'tx_hash'        => $txHash,
-                'payment_status' => $paymentStatus,
-            ]);
-
             return [
-                'status'         => false,
-                'message'        => 'Payment is not completed yet.',
+                'status' => false,
+                'message' => 'Payment not completed.',
                 'payment_status' => $paymentStatus,
+                'tx_hash' => $txHash,
             ];
         }
 
-        if ($receivedAmount === null || $receivedAmount === '') {
+        /*
+        |--------------------------------------------------------------------------
+        | 4. Find Purchase
+        |
+        | Gateway gives us invoice_id.
+        | Find the user's purchase using that invoice_id.
+        |--------------------------------------------------------------------------
+        */
 
-            Log::error('Payment Amount Missing', [
-                'purchase_id' => $purchase->id,
-                'user_id'     => $userId,
-                'invoice_id'  => $invoiceId,
-                'tx_hash'     => $txHash,
-                'gateway_response' => $payment,
-            ]);
+        $purchase = Purchase::query()
+            ->where('user_id', $userId)
+            ->where('invoice_id', $gatewayInvoiceId)
+            ->first();
 
-            return [
-                'status'  => false,
-                'message' => 'Payment amount not found.',
-            ];
+        if (!$purchase) {
+            throw new RuntimeException(
+                'Purchase not found for this invoice.'
+            );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | 5. Invoice verification
+        |--------------------------------------------------------------------------
+        */
 
-        $receivedAmount = (string) $receivedAmount;
+        $purchaseInvoiceId = trim(
+            (string) $purchase->invoice_id
+        );
 
-        $expectedAmount = (string) $purchase->payable_usdt;
+        if (!hash_equals($purchaseInvoiceId, $gatewayInvoiceId)) {
+            throw new RuntimeException(
+                'Invoice ID mismatch.'
+            );
+        }
 
+        /*
+        |--------------------------------------------------------------------------
+        | 6. Amount normalization
+        |
+        | Gateway:
+        |   10
+        |   10.0
+        |   10.00
+        |   10.00000000
+        |
+        | All will be compared as:
+        |   10.00000000
+        |--------------------------------------------------------------------------
+        */
+
+        $purchaseAmount = (string) $purchase->payable_usdt;
+        $receivedAmount = (string) $gatewayAmount;
+
+        /*
+        * Normalize both values to 8 decimal places.
+        *
+        * Example:
+        * 10       -> 10.00000000
+        * 10.0     -> 10.00000000
+        * 10.00    -> 10.00000000
+        * 10.0001  -> 10.00010000
+        */
+
+        $purchaseAmountNormalized = bcadd(
+            $purchaseAmount,
+            '0',
+            8
+        );
+
+        $receivedAmountNormalized = bcadd(
+            $receivedAmount,
+            '0',
+            8
+        );
+
+        Log::info('Purchase webhook amount comparison', [
+            'purchase_id' => $purchase->id,
+            'invoice_id' => $gatewayInvoiceId,
+            'purchase_payable_usdt' => $purchaseAmount,
+            'purchase_normalized' => $purchaseAmountNormalized,
+            'gateway_amount' => $receivedAmount,
+            'gateway_normalized' => $receivedAmountNormalized,
+        ]);
 
         if (
             bccomp(
-                $receivedAmount,
-                $expectedAmount,
+                $receivedAmountNormalized,
+                $purchaseAmountNormalized,
                 8
             ) !== 0
         ) {
-
-            Log::warning('Webhook Payment Amount Mismatch', [
-                'purchase_id'     => $purchase->id,
-                'user_id'         => $userId,
-                'invoice_id'      => $invoiceId,
-                'tx_hash'         => $txHash,
-                'expected_amount' => $expectedAmount,
-                'received_amount' => $receivedAmount,
-            ]);
-
-            return [
-                'status'  => false,
-                'message' => 'Payment amount mismatch.',
-                'expected_amount' => $expectedAmount,
-                'received_amount' => $receivedAmount,
-            ];
+            throw new RuntimeException(
+                "Payment amount mismatch. Expected {$purchaseAmountNormalized} USDT, received {$receivedAmountNormalized} USDT."
+            );
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 7. Process everything atomically
+        |--------------------------------------------------------------------------
+        */
 
         return DB::transaction(function () use (
             $purchase,
+            $userId,
             $txHash,
-            $receivedAmount,
-            $userId
+            $receivedAmountNormalized,
+            $gatewayToken,
+            $payment
         ) {
 
+            /*
+            * Lock purchase
+            */
             $purchase = Purchase::query()
                 ->where('id', $purchase->id)
                 ->where('user_id', $userId)
                 ->lockForUpdate()
                 ->first();
 
-
             if (!$purchase) {
-
                 throw new RuntimeException(
-                    'Purchase not found during transaction.'
+                    'Purchase not found.'
                 );
             }
 
+            /*
+            * Duplicate webhook protection
+            */
             if ($purchase->status === 'completed') {
 
                 return [
-                    'status'  => true,
-                    'message' => 'Payment already processed.',
-                    'data' => [
-                        'purchase_id' => $purchase->id,
-                        'invoice_id'  => $purchase->invoice_id,
-                        'tx_hash'     => $purchase->tx_hash,
-                        'status'      => $purchase->status,
-                    ],
+                    'status' => true,
+                    'message' => 'Purchase already processed.',
+                    'purchase_id' => $purchase->id,
+                    'invoice_id' => $purchase->invoice_id,
+                    'tx_hash' => $purchase->tx_hash,
                 ];
             }
 
+            /*
+            * Lock user
+            */
             $user = User::query()
-                ->where('id', $purchase->user_id)
+                ->where('id', $userId)
                 ->lockForUpdate()
                 ->first();
 
-
             if (!$user) {
-
                 throw new RuntimeException(
                     'User not found.'
                 );
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Credit MIND
+            |--------------------------------------------------------------------------
+            */
 
-            $oldBalance = (string) (
+            $oldMindBalance = (string) (
                 $user->mind_balance ?? '0'
             );
 
-            $mindAmount = (string) (
-                $purchase->total_mind ?? '0'
-            );
+            $totalMind = (string) $purchase->total_mind;
 
-
-            $newBalance = bcadd(
-                $oldBalance,
-                $mindAmount,
+            $newMindBalance = bcadd(
+                $oldMindBalance,
+                $totalMind,
                 8
             );
 
-
-            $user->mind_balance = $newBalance;
+            $user->mind_balance = $newMindBalance;
             $user->save();
 
-            $purchase->received_usdt = $receivedAmount;
-            $purchase->tx_hash       = $txHash;
-            $purchase->status        = 'completed';
-            $purchase->paid_at       = now();
-            $purchase->completed_at  = now();
+            /*
+            |--------------------------------------------------------------------------
+            | Complete Purchase
+            |--------------------------------------------------------------------------
+            */
 
-            $purchase->save();
+            $purchase->update([
+                'received_usdt' => $receivedAmountNormalized,
+                'tx_hash' => $txHash,
+                'status' => 'completed',
+                'paid_at' => now(),
+                'completed_at' => now(),
+            ]);
 
+            /*
+            |--------------------------------------------------------------------------
+            | Create Purchase Transaction
+            |--------------------------------------------------------------------------
+            */
 
             $transaction = Transaction::query()
                 ->where('purchase_id', $purchase->id)
@@ -802,67 +774,62 @@ class PurchaseService
                 ->lockForUpdate()
                 ->first();
 
-
             if (!$transaction) {
 
-                Transaction::create([
-                    'user_id'     => $user->id,
+                $transaction = Transaction::create([
+                    'user_id' => $user->id,
                     'purchase_id' => $purchase->id,
-
-                    'type'        => 'purchase',
-
+                    'type' => 'purchase',
                     'amount_mind' => $purchase->total_mind,
                     'amount_usdt' => $purchase->usdt_amount,
-
                     'rate_applied' => $purchase->mind_price,
-
                     'description' => 'MIND purchase',
-
                     'created_at' => now(),
                 ]);
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Coupon Usage
+            |--------------------------------------------------------------------------
+            */
+
             if (!empty($purchase->coupon_code)) {
 
                 $coupon = Coupon::query()
-                    ->where('code', $purchase->coupon_code)
+                    ->whereRaw(
+                        'UPPER(code) = ?',
+                        [strtoupper($purchase->coupon_code)]
+                    )
                     ->lockForUpdate()
                     ->first();
-
 
                 if ($coupon) {
                     $coupon->increment('used_count');
                 }
             }
 
-            Log::info(
-                'Purchase Webhook Completed Successfully',
-                [
-                    'purchase_id'   => $purchase->id,
-                    'user_id'       => $user->id,
-                    'invoice_id'    => $purchase->invoice_id,
-                    'tx_hash'       => $txHash,
-                    'received_usdt' => $receivedAmount,
-                    'mind_amount'   => $purchase->total_mind,
-                    'old_balance'   => $oldBalance,
-                    'new_balance'   => $newBalance,
-                ]
-            );
+            Log::info('Purchase completed successfully', [
+                'user_id' => $user->id,
+                'purchase_id' => $purchase->id,
+                'invoice_id' => $purchase->invoice_id,
+                'tx_hash' => $txHash,
+                'received_usdt' => $receivedAmountNormalized,
+                'total_mind' => $purchase->total_mind,
+                'old_mind_balance' => $oldMindBalance,
+                'new_mind_balance' => $newMindBalance,
+                'token' => $gatewayToken,
+            ]);
 
             return [
-                'status'  => true,
-                'message' => 'Payment completed successfully.',
-
-                'data' => [
-                    'purchase_id'   => $purchase->id,
-                    'user_id'       => $user->id,
-                    'invoice_id'    => $purchase->invoice_id,
-                    'tx_hash'       => $purchase->tx_hash,
-                    'received_usdt' => $purchase->received_usdt,
-                    'mind_amount'   => $purchase->total_mind,
-                    'mind_balance'  => $user->mind_balance,
-                    'status'        => $purchase->status,
-                ],
+                'status' => true,
+                'message' => 'Purchase completed successfully.',
+                'purchase_id' => $purchase->id,
+                'invoice_id' => $purchase->invoice_id,
+                'tx_hash' => $txHash,
+                'received_usdt' => $receivedAmountNormalized,
+                'total_mind' => $purchase->total_mind,
+                'mind_balance' => $newMindBalance,
             ];
         });
     }
