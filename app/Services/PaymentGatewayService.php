@@ -37,12 +37,10 @@ class PaymentGatewayService
         array $array
     ): array {
 
-        foreach ($array as $key => $value) {
+        foreach ($array as &$value) {
 
             if (is_array($value)) {
-
-                $array[$key] =
-                    $this->sortRecursive($value);
+                $value = $this->sortRecursive($value);
             }
         }
 
@@ -62,31 +60,25 @@ class PaymentGatewayService
         array $payload = []
     ): array {
 
-        $merchantId =
-            $this->merchantId;
+        $merchantId = $this->merchantId;
 
-        $timestamp =
-            time();
+        $timestamp = time();
 
 
         unset(
             $payload['merchant_id'],
             $payload['timestamp'],
-            $payload['signature'],
-            $payload['_token'],
-            $payload['_method']
+            $payload['signature']
         );
 
 
-        $payload =
-            $this->sortRecursive($payload);
+        $payload = $this->sortRecursive($payload);
 
 
-        $jsonPayload =
-            json_encode(
-                $payload,
-                JSON_UNESCAPED_SLASHES
-            );
+        $jsonPayload = json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES
+        );
 
 
         if ($jsonPayload === false) {
@@ -103,26 +95,43 @@ class PaymentGatewayService
             $jsonPayload;
 
 
-        $signature =
-            hash_hmac(
-                'sha256',
-                $message,
-                $this->merchantSecret
-            );
+        $signature = hash_hmac(
+            'sha256',
+            $message,
+            $this->merchantSecret
+        );
 
 
         return [
-            'merchant_id' =>
-                $merchantId,
-
-            'timestamp' =>
-                $timestamp,
-
-            'signature' =>
-                $signature,
+            'merchant_id' => $merchantId,
+            'timestamp'   => $timestamp,
+            'signature'   => $signature,
         ];
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | POST Payload
+    |--------------------------------------------------------------------------
+    */
+
+    public function payload(
+        array $payload = []
+    ): array {
+
+        return array_merge(
+            $payload,
+            $this->generateSignature($payload)
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | GET Auth
+    |--------------------------------------------------------------------------
+    */
 
     public function auth(
         array $payload = []
@@ -130,92 +139,129 @@ class PaymentGatewayService
 
         return array_merge(
             $payload,
-            $this->generateSignature(
-                $payload
-            )
+            $this->generateSignature($payload)
         );
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Client
+    |--------------------------------------------------------------------------
+    */
 
     public function client()
     {
         return Http::asJson()
             ->acceptJson()
             ->timeout(50)
-            ->retry(
-                2,
-                100
-            );
+            ->retry(2, 100);
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Invoice
+    |--------------------------------------------------------------------------
+    */
 
     public function createInvoice(
         array $payload
     ): Response {
 
-        $payload =
-            $this->auth($payload);
+        $requestPayload =
+            $this->payload($payload);
 
 
         Log::info(
-            'Creating gateway invoice',
+            '===== GATEWAY CREATE INVOICE =====',
             [
                 'url' =>
                     $this->url .
                     '/api/v1/create-invoice',
 
                 'payload' =>
-                    $payload,
+                    $requestPayload,
             ]
         );
 
 
-        return $this->client()
-            ->post(
-                $this->url .
-                '/api/v1/create-invoice',
-                $payload
-            );
+        return $this->client()->post(
+            $this->url .
+            '/api/v1/create-invoice',
+            $requestPayload
+        );
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Check Payment By TX Hash
+    |--------------------------------------------------------------------------
+    */
 
     public function checkPaymentByTxHash(
         string $txHash
     ): Response {
 
-        $txHash =
-            trim($txHash);
+        $txHash = trim($txHash);
+
+
+        if ($txHash === '') {
+
+            throw new \InvalidArgumentException(
+                'Transaction hash is required.'
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | IMPORTANT
+        |--------------------------------------------------------------------------
+        |
+        | Signature must be generated using EXACTLY:
+        |
+        | txHash
+        |
+        */
 
         $params = $this->auth([
-            'txHash' =>
-                $txHash,
+            'txHash' => $txHash,
         ]);
 
 
         $url =
             $this->url .
             '/api/v1/payments/' .
-            urlencode($txHash);
+            rawurlencode($txHash);
 
 
         Log::info(
             '===== CHECKING GATEWAY PAYMENT =====',
             [
-                'url' =>
-                    $url,
-
-                'params' =>
-                    $params,
-
-                'tx_hash' =>
-                    $txHash,
+                'url'    => $url,
+                'params' => $params,
+                'txHash' => $txHash,
             ]
         );
 
 
-        return $this->client()
-            ->get(
-                $url,
-                $params
-            );
+        $response = $this->client()->get(
+            $url,
+            $params
+        );
+
+
+        Log::info(
+            '===== GATEWAY PAYMENT RESPONSE =====',
+            [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]
+        );
+
+
+        return $response;
     }
 }

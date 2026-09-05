@@ -27,7 +27,7 @@ class Transaction extends Model
     {
         return [
             'amount_mind' => 'decimal:8',
-            'amount_usdt' => 'decimal:2',
+            'amount_usdt' => 'decimal:8',
             'rate_applied' => 'decimal:2',
             'created_at' => 'datetime',
         ];

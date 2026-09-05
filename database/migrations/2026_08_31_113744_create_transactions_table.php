@@ -14,7 +14,7 @@ return new class extends Migration
             $table->unsignedBigInteger('purchase_id')->nullable();
             $table->enum('type', ['purchase','tier_bonus','coupon_bonus','referral_bonus','withdrawal','admin_adjustment',])->default('purchase');
             $table->decimal('amount_mind', 24, 8)->default(0.00000000);
-            $table->decimal('amount_usdt', 16, 2)->default(0.00);
+            $table->decimal('amount_usdt', 24, 8)->default(0.00000000);
             $table->unsignedBigInteger('source_user_id')->nullable();
             $table->decimal('rate_applied', 5, 2)->default(0.00);
             $table->text('description')->nullable();
