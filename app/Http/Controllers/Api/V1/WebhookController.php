@@ -17,42 +17,59 @@ class WebhookController extends Controller
 
     public function handle(Request $request)
     {
+        $txHash = trim((string) $request->input('txHash'));
+        $userId = $request->query('user_id');
+
         try {
 
-            $invoiceId = $request->input('invoice_id');
-            $txHash = $request->input('txHash');
+            /*
+            |--------------------------------------------------------------------------
+            | Validate Webhook Data
+            |--------------------------------------------------------------------------
+            */
 
-            $userId = $request->query('user_id');
-
-            if (!$invoiceId || !$txHash) {
+            if (!$txHash) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'invoice_id and txHash are required.',
+                    'message' => 'txHash is required.',
                 ], 400);
             }
 
+            if (!$userId) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'user_id is required.',
+                ], 400);
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Process Payment
+            |--------------------------------------------------------------------------
+            */
+
             $result = $this->purchaseService->processWebhook(
-                invoiceId: $invoiceId,
                 txHash: $txHash,
-                userId: $userId ? (int) $userId : null
+                userId: (int) $userId
             );
+
 
             return response()->json($result);
 
         } catch (Throwable $e) {
 
             Log::error('Purchase Webhook Error', [
-                'invoice_id' => $request->input('invoice_id'),
-                'tx_hash' => $request->input('txHash'),
-                'user_id' => $request->query('user_id'),
+                'user_id' => $userId,
+                'tx_hash' => $txHash,
                 'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
             ]);
 
             return response()->json([
-                'status' => false,
-                'message' => 'Something went wrong.',
+                'status'  => false,
+                'message' => $e->getMessage(),
             ], 500);
         }
     }

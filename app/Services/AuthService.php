@@ -126,7 +126,7 @@ class AuthService
             )->plainTextToken;
 
             return [
-                // 'user' => $user,
+                'user' => $user,
                 'token' => $token,
             ];
 
