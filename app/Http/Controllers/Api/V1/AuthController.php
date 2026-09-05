@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\AuthService;
+use App\Models\Purchase;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -164,11 +166,28 @@ class AuthController extends Controller
 
             $user = $request->user();
 
+            $totalUsdBalance = Purchase::query()
+                ->where('user_id', $user->id)
+                ->where('status', 'completed')
+                ->sum('received_usdt');
+
+            $referralBonusMind = Transaction::query()
+                ->where('user_id', $user->id)
+                ->where('type', 'referral_bonus')
+                ->sum('amount_mind');
+
+
             return response()->json([
                 'status' => true,
                 'message' => 'Profile retrieved successfully.',
                 'data' => [
                     'user' => $user,
+
+                    'total_usd_balance' => (float) $totalUsdBalance,
+
+                    'referral_bonus' => [
+                        'mind' => (float) $referralBonusMind,
+                    ],
                 ],
             ], 200);
 
