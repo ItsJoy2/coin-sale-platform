@@ -14,12 +14,14 @@ class Transaction extends Model
     protected $fillable = [
         'user_id',
         'purchase_id',
+        'order_id',
         'type',
         'amount_mind',
         'amount_usdt',
         'source_user_id',
         'rate_applied',
         'description',
+        'status',
         'created_at',
     ];
 
@@ -32,6 +34,26 @@ class Transaction extends Model
             'created_at' => 'datetime',
         ];
     }
+
+        protected static function booted(): void
+    {
+        static::creating(function (Transaction $transaction) {
+
+            if (empty($transaction->order_id)) {
+
+                do {
+                    $orderId = strtoupper(
+                        Str::random(14)
+                    );
+                } while (
+                    self::where('order_id', $orderId)->exists()
+                );
+
+                $transaction->order_id = $orderId;
+            }
+        });
+    }
+
 
     public function user()
     {
@@ -51,11 +73,6 @@ class Transaction extends Model
     public function isPurchase(): bool
     {
         return $this->type === 'purchase';
-    }
-
-    public function isTierBonus(): bool
-    {
-        return $this->type === 'tier_bonus';
     }
 
     public function isCouponBonus(): bool

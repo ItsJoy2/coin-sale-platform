@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\SettingController;
+use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\WebhookController;
 
 Route::prefix('v1')->group(function () {
@@ -25,13 +26,17 @@ Route::prefix('v1')->group(function () {
      Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('purchase')->group(function () {
             Route::post('/',[PurchaseController::class, 'store']);
+            Route::get('payment-status/{invoiceId}',[PurchaseController::class, 'paymentStatus']
+);
         });
+        Route::get('transactions/history',[TransactionController::class, 'history']
+    );
      });
 
     Route::get('settings',[SettingController::class, 'index']);
 
     Route::post('coupon/validate', [PurchaseController::class, 'validateCoupon']);
-    
+
     Route::post('webhook',[WebhookController::class, 'handle']
     );
 });
