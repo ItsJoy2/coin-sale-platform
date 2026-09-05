@@ -46,7 +46,6 @@ class TransactionController extends Controller
                     'id' => $transaction->id,
                     'order_id' => $transaction->order_id,
                     'type' => $transaction->type,
-                    'status' => $transaction->status,
                     'amount_mind' => $transaction->amount_mind,
                     'amount_usdt' => $transaction->amount_usdt,
                     'rate_applied' => $transaction->rate_applied,
