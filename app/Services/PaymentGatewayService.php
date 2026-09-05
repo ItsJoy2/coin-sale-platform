@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class PaymentGatewayService
 {
@@ -18,24 +19,30 @@ class PaymentGatewayService
             '/'
         );
 
-        $this->merchantId = config(
-            'services.geteway.merchant_id'
-        );
+        $this->merchantId =
+            config('services.geteway.merchant_id');
 
-        $this->merchantSecret = config(
-            'services.geteway.merchant_secret'
-        );
+        $this->merchantSecret =
+            config('services.geteway.merchant_secret');
     }
 
-    /**
-     * Recursively sort array by key.
-     */
-    protected function sortRecursive(array $array): array
-    {
-        foreach ($array as &$value) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Recursive Sort
+    |--------------------------------------------------------------------------
+    */
+
+    protected function sortRecursive(
+        array $array
+    ): array {
+
+        foreach ($array as $key => $value) {
 
             if (is_array($value)) {
-                $value = $this->sortRecursive($value);
+
+                $array[$key] =
+                    $this->sortRecursive($value);
             }
         }
 
@@ -44,29 +51,23 @@ class PaymentGatewayService
         return $array;
     }
 
-    /**
-     * Generate Gateway Signature.
-     *
-     * Signature message:
-     *
-     * merchant_id
-     * +
-     * timestamp
-     * +
-     * sorted JSON payload
-     */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generate Signature
+    |--------------------------------------------------------------------------
+    */
+
     protected function generateSignature(
         array $payload = []
     ): array {
 
-        $merchantId = $this->merchantId;
-        $timestamp  = time();
+        $merchantId =
+            $this->merchantId;
 
-        /*
-        |--------------------------------------------------------------------------
-        | Remove authentication fields before signing
-        |--------------------------------------------------------------------------
-        */
+        $timestamp =
+            time();
+
 
         unset(
             $payload['merchant_id'],
@@ -76,127 +77,145 @@ class PaymentGatewayService
             $payload['_method']
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Sort payload exactly like gateway
-        |--------------------------------------------------------------------------
-        */
 
-        $payload = $this->sortRecursive($payload);
+        $payload =
+            $this->sortRecursive($payload);
 
-        $jsonPayload = json_encode(
-            $payload,
-            JSON_UNESCAPED_SLASHES
-        );
+
+        $jsonPayload =
+            json_encode(
+                $payload,
+                JSON_UNESCAPED_SLASHES
+            );
+
 
         if ($jsonPayload === false) {
+
             throw new \RuntimeException(
                 'Unable to encode gateway payload.'
             );
         }
+
 
         $message =
             $merchantId .
             $timestamp .
             $jsonPayload;
 
-        $signature = hash_hmac(
-            'sha256',
-            $message,
-            $this->merchantSecret
-        );
+
+        $signature =
+            hash_hmac(
+                'sha256',
+                $message,
+                $this->merchantSecret
+            );
+
 
         return [
-            'merchant_id' => $merchantId,
-            'timestamp'   => $timestamp,
-            'signature'   => $signature,
+            'merchant_id' =>
+                $merchantId,
+
+            'timestamp' =>
+                $timestamp,
+
+            'signature' =>
+                $signature,
         ];
     }
 
-    /**
-     * POST payload with authentication.
-     */
-    public function payload(
-        array $payload = []
-    ): array {
 
-        return array_merge(
-            $payload,
-            $this->generateSignature($payload)
-        );
-    }
-
-    /**
-     * GET query parameters with authentication.
-     */
     public function auth(
         array $payload = []
     ): array {
 
         return array_merge(
             $payload,
-            $this->generateSignature($payload)
+            $this->generateSignature(
+                $payload
+            )
         );
     }
 
-    /**
-     * HTTP Client.
-     */
+
     public function client()
     {
         return Http::asJson()
             ->acceptJson()
             ->timeout(50)
-            ->retry(2, 100);
+            ->retry(
+                2,
+                100
+            );
     }
 
-    /**
-     * Create Invoice.
-     */
+
     public function createInvoice(
         array $payload
     ): Response {
 
-        $requestPayload = $this->payload($payload);
+        $payload =
+            $this->auth($payload);
 
-        return $this->client()->post(
-            $this->url . '/api/v1/create-invoice',
-            $requestPayload
+
+        Log::info(
+            'Creating gateway invoice',
+            [
+                'url' =>
+                    $this->url .
+                    '/api/v1/create-invoice',
+
+                'payload' =>
+                    $payload,
+            ]
         );
+
+
+        return $this->client()
+            ->post(
+                $this->url .
+                '/api/v1/create-invoice',
+                $payload
+            );
     }
 
     public function checkPaymentByTxHash(
         string $txHash
     ): Response {
 
-        $txHash = trim($txHash);
-
-        if ($txHash === '') {
-            throw new \InvalidArgumentException(
-                'Transaction hash is required.'
-            );
-        }
+        $txHash =
+            trim($txHash);
 
         $params = $this->auth([
-            'txHash' => $txHash,
+            'txHash' =>
+                $txHash,
         ]);
 
 
-        \Log::info('Gateway payment check request', [
-            'url' => $this->url . '/api/v1/payments/' . urlencode($txHash),
-            'params' => [
-                'txHash' => $txHash,
-                'merchant_id' => $params['merchant_id'],
-                'timestamp' => $params['timestamp'],
-                'signature' => $params['signature'],
-            ],
-        ]);
-
-        return $this->client()->get(
+        $url =
             $this->url .
-                '/api/v1/payments/' .
-                urlencode($txHash),
-            $params
+            '/api/v1/payments/' .
+            urlencode($txHash);
+
+
+        Log::info(
+            '===== CHECKING GATEWAY PAYMENT =====',
+            [
+                'url' =>
+                    $url,
+
+                'params' =>
+                    $params,
+
+                'tx_hash' =>
+                    $txHash,
+            ]
         );
+
+
+        return $this->client()
+            ->get(
+                $url,
+                $params
+            );
     }
 }
