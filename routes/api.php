@@ -18,16 +18,17 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
 
             Route::post('logout',[AuthController::class, 'logout']);
-            Route::get('profile', [AuthController::class, 'profile']);
-
+            Route::prefix('profile')->group(function () {
+                Route::get('/', [AuthController::class, 'profile']);
+                Route::post('update', [AuthController::class, 'updateProfile']);
+            });
         });
     });
 
      Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('purchase')->group(function () {
             Route::post('/',[PurchaseController::class, 'store']);
-            Route::get('payment-status/{invoiceId}',[PurchaseController::class, 'paymentStatus']
-);
+            Route::get('payment-status/{invoiceId}',[PurchaseController::class, 'paymentStatus']);
         });
         Route::get('transactions/history',[TransactionController::class, 'history']
     );

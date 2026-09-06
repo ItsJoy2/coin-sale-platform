@@ -25,20 +25,26 @@ class TransactionController extends Controller
                 ], 401);
             }
 
-            /*
-            |--------------------------------------------------------------------------
-            | Get Transactions
-            |--------------------------------------------------------------------------
-            */
+            $type = $request->input('type');
+            $status = $request->input('status');
 
-            $transactions = Transaction::query()
+            $transactionQuery = Transaction::query()
                 ->where('user_id', $user->id)
                 ->with([
                     'purchase:id,invoice_id,tx_hash,payment_address,status,paid_at,completed_at',
                     'sourceUser:id,user_name,wallet_address',
                 ])
-                ->orderByDesc('id')
-                ->get();
+                ->orderByDesc('id');
+
+            if ($type) {
+                $transactionQuery->where('type', $type);
+            }
+
+            if ($status) {
+                $transactionQuery->where('status', $status);
+            }
+
+            $transactions = $transactionQuery->get();
 
             $transactionData = $transactions->map(function ($transaction) {
 
@@ -55,44 +61,36 @@ class TransactionController extends Controller
                 ];
             });
 
-            $pendingPurchases = Purchase::query()
-                ->where('user_id', $user->id)
-                ->where('status', 'pending')
-                ->orderByDesc('id')
-                ->get();
+            $pendingPurchaseData = collect();
 
-            $pendingPurchaseData = $pendingPurchases->map(function ($purchase) {
+            if (!$type || $type === 'purchase') {
 
-                return [
-                    'id' => $purchase->id,
-                    'order_id' => $purchase->invoice_id,
-                    'type' => 'purchase',
-                    'amount_mind' => $purchase->amount_mind ?? null,
-                    'amount_usdt' => $purchase->amount_usdt ?? null,
-                    'rate_applied' => $purchase->rate_applied ?? null,
-                    'description' => 'Purchase payment is pending.',
+                $pendingPurchaseQuery = Purchase::query()
+                    ->where('user_id', $user->id)
+                    ->where('status', 'pending')
+                    ->orderByDesc('id');
 
-                    // 'purchase' => [
-                    //     'id' => $purchase->id,
+                if ($status) {
+                    $pendingPurchaseQuery->where('status', $status);
+                }
 
-                    //     'order_id' => $purchase->invoice_id,
+                $pendingPurchases = $pendingPurchaseQuery->get();
 
-                    //     'invoice_id' => $purchase->invoice_id,
+                $pendingPurchaseData = $pendingPurchases->map(function ($purchase) {
 
-                    //     'tx_hash' => $purchase->tx_hash,
-
-                    //     'payment_address' => $purchase->payment_address,
-
-                    //     'status' => $purchase->status,
-
-                    //     'paid_at' => $purchase->paid_at,
-
-                    //     'completed_at' => $purchase->completed_at,
-                    // ],
-                    'status' => 'pending',
-                    'created_at' => $purchase->created_at,
-                ];
-            });
+                    return [
+                        'id' => $purchase->id,
+                        'order_id' => $purchase->invoice_id,
+                        'type' => 'purchase',
+                        'amount_mind' => $purchase->amount_mind ?? null,
+                        'amount_usdt' => $purchase->amount_usdt ?? null,
+                        'rate_applied' => $purchase->rate_applied ?? null,
+                        'description' => 'Purchase payment is pending.',
+                        'status' => 'pending',
+                        'created_at' => $purchase->created_at,
+                    ];
+                });
+            }
 
             $data = $transactionData
                 ->concat($pendingPurchaseData)
@@ -103,6 +101,7 @@ class TransactionController extends Controller
                         : 0;
                 })
                 ->values();
+
 
             $perPage = 20;
 
@@ -140,11 +139,8 @@ class TransactionController extends Controller
 
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
-
                     'last_page' => $paginator->lastPage(),
-
                     'per_page' => $paginator->perPage(),
-
                     'total' => $paginator->total(),
                 ],
             ]);
@@ -153,21 +149,17 @@ class TransactionController extends Controller
 
             Log::error('Transaction history error', [
                 'user_id' => $request->user()?->id,
-
                 'message' => $e->getMessage(),
-
                 'file' => $e->getFile(),
-
                 'line' => $e->getLine(),
-
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'status' => false,
-
                 'message' => 'Unable to fetch transaction history.',
             ], 500);
         }
     }
+
 }

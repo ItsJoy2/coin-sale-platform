@@ -54,7 +54,6 @@ class AuthService
                         'wallet_address' => $user->wallet_address,
                         'referral_code' => $user->referral_code,
                         'referred_id' => $user->referred_id,
-                        'role' => $user->role,
                     ],
                     'token' => $token,
                 ];
@@ -125,8 +124,11 @@ class AuthService
                 'user-api'
             )->plainTextToken;
 
+            $userData = $user->toArray();
+            unset($userData['role']);
+
             return [
-                'user' => $user,
+                'user' => $userData,
                 'token' => $token,
             ];
 

@@ -160,46 +160,92 @@ class AuthController extends Controller
         }
     }
 
-public function profile(Request $request)
-{
-    try {
+    public function profile(Request $request)
+    {
+        try {
 
-        $user = $request->user();
+            $user = $request->user();
 
-        $totalUsdBalance = Purchase::query()
-            ->where('user_id', $user->id)
-            ->where('status', 'completed')
-            ->sum('received_usdt');
+            $totalUsdBalance = Purchase::query()
+                ->where('user_id', $user->id)
+                ->where('status', 'completed')
+                ->sum('received_usdt');
 
-        $referralBonusMind = Transaction::query()
-            ->where('user_id', $user->id)
-            ->where('type', 'referral_bonus')
-            ->sum('amount_mind');
+            $referralBonusMind = Transaction::query()
+                ->where('user_id', $user->id)
+                ->where('type', 'referral_bonus')
+                ->sum('amount_mind');
 
-        return response()->json([
-            'status' => true,
-            'message' => 'Profile retrieved successfully.',
-            'data' => [
-                'user' => [
-                    ...$user->toArray(),
+            $userData = $user->toArray();
+            unset($userData['role']);
 
-                    'total_usd_balance' => (float) $totalUsdBalance,
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile retrieved successfully.',
+                'data' => [
+                    'user' => [
+                        ...$userData,
 
-                    'referral_bonus' => [
-                        'mind' => (float) $referralBonusMind,
+                        'total_usd_balance' => (float) $totalUsdBalance,
+                        'referral_bonus' => [
+                            'mind' => (float) $referralBonusMind,
+                        ],
                     ],
                 ],
-            ],
-        ], 200);
+            ], 200);
 
-    } catch (Throwable $e) {
+        } catch (Throwable $e) {
 
-        report($e);
+            report($e);
 
-        return response()->json([
-            'status' => false,
-            'message' => 'Something went wrong. Please try again later.'
-        ], 500);
+            return response()->json([
+                'status' => false,
+                'message' => 'Something went wrong. Please try again later.'
+            ], 500);
+        }
     }
-}
+
+    public function updateProfile(Request $request)
+    {
+        try {
+
+            $user = $request->user();
+
+            $validated = $request->validate([
+                'name' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'address' => ['sometimes', 'nullable', 'string', 'max:500'],
+                'email' => ['sometimes','nullable','max:255','unique:users,email,' . $user->id,
+                ],
+            ]);
+
+            $user->update($validated);
+
+            // Refresh user data
+            $user->refresh();
+
+            $userData = $user->toArray();
+            unset($userData['role']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile updated successfully.',
+                'data' => [
+                    'user' => $userData,
+                ],
+            ], 200);
+
+        } catch (ValidationException $e) {
+
+            throw $e;
+
+        } catch (Throwable $e) {
+
+            report($e);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Something went wrong. Please try again later.'
+            ], 500);
+        }
+    }
 }
