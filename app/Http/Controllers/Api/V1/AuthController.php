@@ -227,7 +227,6 @@ class AuthController extends Controller
         }
     }
 
-
     public function profile(Request $request)
     {
         try {
@@ -241,61 +240,172 @@ class AuthController extends Controller
                 ], 401);
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Total USD Balance
+            |--------------------------------------------------------------------------
+            */
+
             $totalUsdBalance = Purchase::query()
                 ->where('user_id', $user->id)
                 ->where('status', 'completed')
                 ->sum('received_usdt');
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Total Referral Bonus
+            |--------------------------------------------------------------------------
+            */
 
             $referralBonusMind = Transaction::query()
                 ->where('user_id', $user->id)
                 ->where('type', 'referral_bonus')
                 ->sum('amount_mind');
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Get Referral Users
+            |--------------------------------------------------------------------------
+            */
+
             $referralUsers = User::query()
                 ->where('referred_id', $user->id)
-                ->select(['id','wallet_address',])
+                ->select(['id','wallet_address', 'created_at',])
                 ->orderByDesc('id')
                 ->get();
 
+            $referralBonusTransactions = Transaction::query()
+                ->where('user_id', $user->id)
+                ->where('type', 'referral_bonus')
+                ->whereIn('source_user_id',$referralUsers->pluck('id'))
+                ->select(['id','source_user_id','amount_mind','rate_applied','created_at',])
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('source_user_id');
+
+
             $userData = $user->toArray();
+
             unset($userData['role']);
+
+
+
+            $referralUserData = $referralUsers->map(
+                function ($referralUser) use ($referralBonusTransactions) {
+
+                    $transactions = $referralBonusTransactions->get(
+                        $referralUser->id,
+                        collect()
+                    );
+
+                    $totalMindBonus = $transactions->sum(
+                        function ($transaction) {
+                            return (float) $transaction->amount_mind;
+                        }
+                    );
+
+                    $totalUsdtValue = $transactions->sum(
+                        function ($transaction) {
+
+                            $amountMind = (float) $transaction->amount_mind;
+
+                            $rateApplied = (float) $transaction->rate_applied;
+
+                            return $amountMind * $rateApplied;
+                        }
+                    );
+
+                    $bonusTransactions = $transactions->map(
+                        function ($transaction) {
+
+                            $amountMind = (float) $transaction->amount_mind;
+
+                            $rateApplied = (float) $transaction->rate_applied;
+
+                            $amountUsdt = $amountMind * $rateApplied;
+
+                            return [
+                                'id' => $transaction->id,
+                                'amount_mind' => round($amountMind, 8 ),
+                                'rate_applied' => round($rateApplied, 8 ),
+                                'amount_usdt' => round( $amountUsdt, 8),
+                                'created_at' => $transaction->created_at,
+                            ];
+                        }
+                    )->values();
+
+                    return [
+                        'id' => $referralUser->id,
+
+                        'wallet_address' => $referralUser->wallet_address,
+
+                        'referral_bonus' => [
+                            'mind' => round($totalMindBonus, 8 ),
+                            'usdt' => round($totalUsdtValue, 8), ],
+
+                        'created_at' => $referralUser->created_at,
+                    ];
+                }
+            )->values();
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Response
+            |--------------------------------------------------------------------------
+            */
 
             return response()->json([
                 'status' => true,
+
                 'message' => 'Profile retrieved successfully.',
+
                 'data' => [
                     'user' => [
+
                         ...$userData,
 
-                        'total_usd_balance' => (float) $totalUsdBalance,
+                        'total_usd_balance' => round(
+                            (float) $totalUsdBalance,
+                            8
+                        ),
 
                         'referral_bonus' => [
-                            'mind' => (float) $referralBonusMind,
+                            'mind' => round(
+                                (float) $referralBonusMind,
+                                8
+                            ),
                         ],
 
                         'total_referral' => $referralUsers->count(),
 
-                        'referral_users' => $referralUsers->map(function ($referralUser) {
-                            return [
-                                'id' => $referralUser->id,
-                                'wallet_address' => $referralUser->wallet_address,
-                            ];
-                        })->values(),
+                        'referral_users' => $referralUserData,
                     ],
                 ],
             ], 200);
 
+
         } catch (\Throwable $e) {
 
-            report($e);
+            Log::error('Profile API Error', [
+                'user_id' => $request->user()?->id,
+
+                'message' => $e->getMessage(),
+
+                'file' => $e->getFile(),
+
+                'line' => $e->getLine(),
+            ]);
 
             return response()->json([
                 'status' => false,
+
                 'message' => 'Something went wrong. Please try again later.',
             ], 500);
         }
     }
-
 
     public function updateProfile(Request $request)
     {
