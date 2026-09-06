@@ -272,7 +272,7 @@ class AuthController extends Controller
 
             $referralUsers = User::query()
                 ->where('referred_id', $user->id)
-                ->select(['id','wallet_address', 'created_at',])
+                ->select(['id','wallet_address', 'name', 'created_at',])
                 ->orderByDesc('id')
                 ->get();
 
@@ -338,7 +338,7 @@ class AuthController extends Controller
 
                     return [
                         'id' => $referralUser->id,
-
+                        'name' => $referralUser->name,
                         'wallet_address' => $referralUser->wallet_address,
 
                         'referral_bonus' => [
