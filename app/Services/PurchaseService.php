@@ -1183,7 +1183,7 @@ class PurchaseService
 
                                         'description' =>
                                             'Referral bonus from user #' .
-                                            $user->id .
+                                            $user->wallet_address .
                                             ' purchase.',
 
                                         'status' =>
