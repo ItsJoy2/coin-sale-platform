@@ -20,7 +20,9 @@ class SettingController extends Controller
                     'logo',
                     'favicon',
                 ],
-
+                'referral_commission' => [
+                    'referral_bonus_percentage',
+                ],
                 'mind' => [
                     'mind_price',
                 ],

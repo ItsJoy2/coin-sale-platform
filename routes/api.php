@@ -17,6 +17,7 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('auth:sanctum')->group(function () {
 
+            Route::post('change-password', [AuthController::class, 'changePassword']);
             Route::post('logout',[AuthController::class, 'logout']);
             Route::prefix('profile')->group(function () {
                 Route::get('/', [AuthController::class, 'profile']);

@@ -837,12 +837,6 @@ class PurchaseService
                 $payment
             ) {
 
-                /*
-                |--------------------------------------------------------------------------
-                | Lock Purchase
-                |--------------------------------------------------------------------------
-                */
-
                 $lockedPurchase = Purchase::query()
                     ->where('id', $purchase->id)
                     ->lockForUpdate()
@@ -854,11 +848,6 @@ class PurchaseService
                     );
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | Duplicate Protection
-                |--------------------------------------------------------------------------
-                */
 
                 if ($lockedPurchase->status === 'completed') {
 
@@ -893,17 +882,6 @@ class PurchaseService
                     );
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | MIND Amount
-                |--------------------------------------------------------------------------
-                |
-                | IMPORTANT:
-                | এখানে USDT amount credit হবে না।
-                |
-                | Purchase এর total_mind credit হবে।
-                |
-                */
 
                 $mindToCredit = bcadd(
                     (string) $lockedPurchase->total_mind,
@@ -912,11 +890,7 @@ class PurchaseService
                 );
 
                 if (
-                    bccomp(
-                        $mindToCredit,
-                        '0',
-                        8
-                    ) <= 0
+                    bccomp($mindToCredit, '0', 8) <= 0
                 ) {
 
                     throw new \Exception(
@@ -924,16 +898,9 @@ class PurchaseService
                     );
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | Update User Balance
-                |--------------------------------------------------------------------------
-                */
 
                 $oldBalance = bcadd(
-                    (string) ($user->mind_balance ?? '0'),
-                    '0',
-                    8
+                    (string) ($user->mind_balance ?? '0'), '0', 8
                 );
 
                 $newBalance = bcadd(
@@ -945,11 +912,6 @@ class PurchaseService
                 $user->mind_balance = $newBalance;
                 $user->save();
 
-                /*
-                |--------------------------------------------------------------------------
-                | Update Purchase
-                |--------------------------------------------------------------------------
-                */
 
                 $lockedPurchase->update([
                     'tx_hash'       => $txHash,
@@ -959,14 +921,7 @@ class PurchaseService
                     'status'        => 'completed',
                 ]);
 
-                /*
-                |--------------------------------------------------------------------------
-                | Create Purchase Transaction
-                |--------------------------------------------------------------------------
-                |
-                | Current transactions table অনুযায়ী fields ব্যবহার করা হচ্ছে।
-                |
-                */
+
 
                 $transaction = Transaction::query()
                     ->where('purchase_id', $lockedPurchase->id)
@@ -984,8 +939,8 @@ class PurchaseService
                         'amount_usdt'  => $receivedAmount,
                         'rate_applied' => $lockedPurchase->mind_price,
                         'description'  =>
-                            'MIND purchase payment via gateway. TX: ' .
-                            $txHash,
+                            'MIND purchase payment via gateway. TX: ' . $txHash,
+                        'status'       => 'completed',
                         'created_at'   => now(),
                     ]);
 
@@ -1010,16 +965,6 @@ class PurchaseService
                         ]
                     );
                 }
-
-                /*
-                |--------------------------------------------------------------------------
-                | Save Gateway Response
-                |--------------------------------------------------------------------------
-                |
-                | যদি purchases table-এ gateway_response column না থাকে,
-                | এই অংশটি বাদ দিতে হবে।
-                |
-                */
 
                 if (
                     \Schema::hasColumn(
@@ -1058,11 +1003,6 @@ class PurchaseService
             }
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | 11. Final Response
-        |--------------------------------------------------------------------------
-        */
 
         if ($result['already_completed'] ?? false) {
 

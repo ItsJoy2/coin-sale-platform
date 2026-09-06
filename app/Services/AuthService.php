@@ -25,10 +25,7 @@ class AuthService
                 $referrer = null;
 
                 if (!empty($data['referral_code'])) {
-                    $referrer = User::where(
-                        'referral_code',
-                        $data['referral_code']
-                    )->first();
+                    $referrer = User::where('referral_code',$data['referral_code'])->first();
                 }
 
                 do {
