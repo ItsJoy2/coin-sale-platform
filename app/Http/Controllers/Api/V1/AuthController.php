@@ -160,28 +160,28 @@ class AuthController extends Controller
         }
     }
 
-    public function profile(Request $request)
-    {
-        try {
+public function profile(Request $request)
+{
+    try {
 
-            $user = $request->user();
+        $user = $request->user();
 
-            $totalUsdBalance = Purchase::query()
-                ->where('user_id', $user->id)
-                ->where('status', 'completed')
-                ->sum('received_usdt');
+        $totalUsdBalance = Purchase::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->sum('received_usdt');
 
-            $referralBonusMind = Transaction::query()
-                ->where('user_id', $user->id)
-                ->where('type', 'referral_bonus')
-                ->sum('amount_mind');
+        $referralBonusMind = Transaction::query()
+            ->where('user_id', $user->id)
+            ->where('type', 'referral_bonus')
+            ->sum('amount_mind');
 
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Profile retrieved successfully.',
-                'data' => [
-                    'user' => $user,
+        return response()->json([
+            'status' => true,
+            'message' => 'Profile retrieved successfully.',
+            'data' => [
+                'user' => [
+                    ...$user->toArray(),
 
                     'total_usd_balance' => (float) $totalUsdBalance,
 
@@ -189,16 +189,17 @@ class AuthController extends Controller
                         'mind' => (float) $referralBonusMind,
                     ],
                 ],
-            ], 200);
+            ],
+        ], 200);
 
-        } catch (Throwable $e) {
+    } catch (Throwable $e) {
 
-            report($e);
+        report($e);
 
-            return response()->json([
-                'status' => false,
-                'message' => 'Something went wrong. Please try again later.'
-            ], 500);
-        }
+        return response()->json([
+            'status' => false,
+            'message' => 'Something went wrong. Please try again later.'
+        ], 500);
     }
+}
 }
