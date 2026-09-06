@@ -6,6 +6,8 @@ use App\Models\Coupon;
 use App\Models\Purchase;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\PaymentGatewayService;
+use App\Services\SettingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
