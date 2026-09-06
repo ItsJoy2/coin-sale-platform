@@ -477,11 +477,13 @@ class PurchaseService
     /**
      * Process payment gateway webhook.
      */
+
     public function processWebhook(
         string $invoiceId,
         string $txHash,
         int $userId
     ): array {
+
         $invoiceId = trim($invoiceId);
         $txHash    = trim($txHash);
 
@@ -503,11 +505,6 @@ class PurchaseService
             throw new \Exception('Invalid user_id.');
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 1. Find Purchase
-        |--------------------------------------------------------------------------
-        */
 
         $purchase = Purchase::query()
             ->where('invoice_id', $invoiceId)
@@ -536,15 +533,6 @@ class PurchaseService
             'total_mind'  => $purchase->total_mind,
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | 2. Save TX Hash Immediately
-        |--------------------------------------------------------------------------
-        |
-        | Gateway webhook এ txHash আসলেই প্রথমে purchase এ save করছি।
-        |
-        */
-
         if (
             empty($purchase->tx_hash) ||
             $purchase->tx_hash !== $txHash
@@ -562,15 +550,6 @@ class PurchaseService
             $purchase->refresh();
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 3. Already Completed Check
-        |--------------------------------------------------------------------------
-        |
-        | যদি webhook duplicate হয় এবং purchase already completed হয়,
-        | তাহলে আবার balance credit করা হবে না।
-        |
-        */
 
         if ($purchase->status === 'completed') {
 
@@ -584,19 +563,14 @@ class PurchaseService
             );
 
             return [
-                'status'     => true,
-                'message'    => 'Purchase already completed.',
-                'invoice_id' => $invoiceId,
-                'tx_hash'    => $txHash,
-                'purchase_id'=> $purchase->id,
+                'status'      => true,
+                'message'     => 'Purchase already completed.',
+                'invoice_id'  => $invoiceId,
+                'tx_hash'     => $txHash,
+                'purchase_id' => $purchase->id,
             ];
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 4. Verify Payment From Gateway
-        |--------------------------------------------------------------------------
-        */
 
         Log::info(
             'Checking payment from gateway.',
@@ -636,11 +610,6 @@ class PurchaseService
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 5. Extract Gateway Response
-        |--------------------------------------------------------------------------
-        */
 
         $gatewayStatus =
             $payment['status']
@@ -683,19 +652,14 @@ class PurchaseService
         Log::info(
             'Parsed gateway payment.',
             [
-                'purchase_id'       => $purchase->id,
-                'gateway_invoice_id'=> $gatewayInvoiceId,
-                'payment_status'    => $paymentStatus,
-                'actual_amount'     => $actualAmount,
-                'token'             => $token,
+                'purchase_id'        => $purchase->id,
+                'gateway_invoice_id' => $gatewayInvoiceId,
+                'payment_status'     => $paymentStatus,
+                'actual_amount'      => $actualAmount,
+                'token'              => $token,
             ]
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | 6. Verify Invoice ID
-        |--------------------------------------------------------------------------
-        */
 
         if (
             $gatewayInvoiceId !== null &&
@@ -707,7 +671,7 @@ class PurchaseService
                 [
                     'expected_invoice_id' => $invoiceId,
                     'gateway_invoice_id'  => $gatewayInvoiceId,
-                    'tx_hash'              => $txHash,
+                    'tx_hash'             => $txHash,
                 ]
             );
 
@@ -716,11 +680,6 @@ class PurchaseService
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 7. Verify Payment Status
-        |--------------------------------------------------------------------------
-        */
 
         if (
             strtolower(
@@ -747,11 +706,6 @@ class PurchaseService
             ];
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 8. Validate Amount
-        |--------------------------------------------------------------------------
-        */
 
         if ($actualAmount === null || $actualAmount === '') {
 
@@ -775,9 +729,9 @@ class PurchaseService
         Log::info(
             'Comparing payment amount.',
             [
-                'purchase_id'    => $purchase->id,
-                'expected_amount'=> $expectedAmount,
-                'received_amount'=> $receivedAmount,
+                'purchase_id'     => $purchase->id,
+                'expected_amount' => $expectedAmount,
+                'received_amount' => $receivedAmount,
             ]
         );
 
@@ -805,12 +759,6 @@ class PurchaseService
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 9. Token Validation
-        |--------------------------------------------------------------------------
-        */
-
         if (
             $token !== null &&
             strtoupper(trim((string) $token)) !== 'USDT'
@@ -821,11 +769,6 @@ class PurchaseService
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 10. Atomic Completion
-        |--------------------------------------------------------------------------
-        */
 
         $result = DB::transaction(
             function () use (
@@ -837,23 +780,27 @@ class PurchaseService
                 $payment
             ) {
 
+
                 $lockedPurchase = Purchase::query()
                     ->where('id', $purchase->id)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$lockedPurchase) {
+
                     throw new \Exception(
                         'Purchase not found during transaction.'
                     );
                 }
+
+
                 if ($lockedPurchase->status === 'completed') {
 
                     Log::warning(
                         'Purchase completed while processing webhook.',
                         [
                             'purchase_id' => $lockedPurchase->id,
-                            'tx_hash'      => $txHash,
+                            'tx_hash'     => $txHash,
                         ]
                     );
 
@@ -863,16 +810,19 @@ class PurchaseService
                     ];
                 }
 
+
                 $user = User::query()
                     ->where('id', $userId)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$user) {
+
                     throw new \Exception(
                         'User not found.'
                     );
                 }
+
 
                 $mindToCredit = bcadd(
                     (string) $lockedPurchase->total_mind,
@@ -893,7 +843,6 @@ class PurchaseService
                     );
                 }
 
-
                 $oldBalance = bcadd(
                     (string) ($user->mind_balance ?? '0'),
                     '0',
@@ -908,6 +857,7 @@ class PurchaseService
 
                 $user->mind_balance = $newBalance;
                 $user->save();
+
 
                 $lockedPurchase->update([
                     'tx_hash'       => $txHash,
@@ -936,6 +886,7 @@ class PurchaseService
                         'description'  =>
                             'MIND purchase payment via gateway. TX: ' .
                             $txHash,
+                        'status'       => 'completed',
                         'created_at'   => now(),
                     ]);
 
@@ -949,17 +900,209 @@ class PurchaseService
                             'amount_usdt'    => $receivedAmount,
                         ]
                     );
-
-                } else {
-
-                    Log::warning(
-                        'Purchase transaction already exists.',
-                        [
-                            'transaction_id' => $transaction->id,
-                            'purchase_id'    => $lockedPurchase->id,
-                        ]
-                    );
                 }
+
+
+                $referralBonusMind = '0';
+                $referrerNewBalance = null;
+                $referralTransaction = null;
+
+
+                $referralPercentage = Setting::query()
+                    ->where('key', 'referral_bonus_percentage')
+                    ->value('value');
+
+                $referralPercentage = bcadd(
+                    (string) ($referralPercentage ?? '0'),
+                    '0',
+                    8
+                );
+
+
+                if (
+                    !empty($user->referred_id) &&
+                    bccomp($referralPercentage, '0', 8) > 0
+                ) {
+
+
+                    $referrer = User::query()
+                        ->where('id', $user->referred_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($referrer) {
+
+                        $referralBonusMind = bcdiv(
+                            bcmul(
+                                $mindToCredit,
+                                $referralPercentage,
+                                16
+                            ),
+                            '100',
+                            8
+                        );
+
+                        if (
+                            bccomp(
+                                $referralBonusMind,
+                                '0',
+                                8
+                            ) > 0
+                        ) {
+
+                            $existingReferralBonus = Transaction::query()
+                                ->where('purchase_id', $lockedPurchase->id)
+                                ->where('type', 'referral_bonus')
+                                ->where('user_id', $referrer->id)
+                                ->lockForUpdate()
+                                ->first();
+
+                            if (!$existingReferralBonus) {
+
+                                $referrerOldBalance = bcadd(
+                                    (string) ($referrer->mind_balance ?? '0'),
+                                    '0',
+                                    8
+                                );
+
+                                $referrerNewBalance = bcadd(
+                                    $referrerOldBalance,
+                                    $referralBonusMind,
+                                    8
+                                );
+
+                                $referrer->mind_balance =
+                                    $referrerNewBalance;
+
+                                $referrer->save();
+
+                                $referrerNewBalance =
+                                    $referrer->mind_balance;
+
+
+                                $referralTransaction =
+                                    Transaction::create([
+                                        'user_id' =>
+                                            $referrer->id,
+
+                                        'purchase_id' =>
+                                            $lockedPurchase->id,
+
+                                        'type' =>
+                                            'referral_bonus',
+
+                                        'amount_mind' =>
+                                            $referralBonusMind,
+
+                                        'amount_usdt' =>
+                                            bcmul(
+                                                $referralBonusMind,
+                                                (string) $lockedPurchase->mind_price,
+                                                8
+                                            ),
+
+                                        'source_user_id' =>
+                                            $user->id,
+
+                                        'rate_applied' =>
+                                            $lockedPurchase->mind_price,
+
+                                        'description' =>
+                                            'Referral bonus from user #' .
+                                            $user->id .
+                                            ' purchase.',
+
+                                        'status' =>
+                                            'completed',
+
+                                        'created_at' =>
+                                            now(),
+                                    ]);
+
+                                Log::info(
+                                    'Referral bonus credited successfully.',
+                                    [
+                                        'referrer_id' =>
+                                            $referrer->id,
+
+                                        'buyer_id' =>
+                                            $user->id,
+
+                                        'purchase_id' =>
+                                            $lockedPurchase->id,
+
+                                        'bonus_percentage' =>
+                                            $referralPercentage,
+
+                                        'main_mind' =>
+                                            $mindToCredit,
+
+                                        'bonus_mind' =>
+                                            $referralBonusMind,
+
+                                        'rate_applied' =>
+                                            $lockedPurchase->mind_price,
+
+                                        'bonus_usdt' =>
+                                            bcmul(
+                                                $referralBonusMind,
+                                                (string) $lockedPurchase->mind_price,
+                                                8
+                                            ),
+
+                                        'new_balance' =>
+                                            $referrerNewBalance,
+
+                                        'transaction_id' =>
+                                            $referralTransaction->id,
+                                    ]
+                                );
+                            } else {
+
+                                $referralBonusMind =
+                                    bcadd(
+                                        (string)
+                                            $existingReferralBonus->amount_mind,
+                                        '0',
+                                        8
+                                    );
+
+                                Log::warning(
+                                    'Referral bonus already exists. Duplicate ignored.',
+                                    [
+                                        'referrer_id' =>
+                                            $referrer->id,
+
+                                        'buyer_id' =>
+                                            $user->id,
+
+                                        'purchase_id' =>
+                                            $lockedPurchase->id,
+
+                                        'transaction_id' =>
+                                            $existingReferralBonus->id,
+                                    ]
+                                );
+                            }
+                        }
+                    } else {
+
+                        Log::warning(
+                            'Referrer user not found. Referral bonus skipped.',
+                            [
+                                'buyer_id' =>
+                                    $user->id,
+
+                                'referred_id' =>
+                                    $user->referred_id,
+
+                                'purchase_id' =>
+                                    $lockedPurchase->id,
+                            ]
+                        );
+                    }
+                }
+
 
                 if (
                     \Schema::hasColumn(
@@ -973,6 +1116,7 @@ class PurchaseService
                     ]);
                 }
 
+
                 Log::info(
                     'Purchase completed successfully.',
                     [
@@ -984,16 +1128,45 @@ class PurchaseService
                         'mind'        => $mindToCredit,
                         'old_balance' => $oldBalance,
                         'new_balance' => $newBalance,
+
+                        'referrer_id' =>
+                            $user->referred_id,
+
+                        'referral_bonus_mind' =>
+                            $referralBonusMind,
+
+                        'referrer_new_balance' =>
+                            $referrerNewBalance,
                     ]
                 );
 
                 return [
-                    'already_completed' => false,
-                    'purchase_id'       => $lockedPurchase->id,
-                    'transaction_id'    => $transaction->id,
-                    'mind_credited'     => $mindToCredit,
-                    'usdt_received'     => $receivedAmount,
-                    'new_balance'       => $newBalance,
+                    'already_completed' =>
+                        false,
+
+                    'purchase_id' =>
+                        $lockedPurchase->id,
+
+                    'transaction_id' =>
+                        $transaction->id,
+
+                    'mind_credited' =>
+                        $mindToCredit,
+
+                    'usdt_received' =>
+                        $receivedAmount,
+
+                    'new_balance' =>
+                        $newBalance,
+
+                    'referral_bonus_mind' =>
+                        $referralBonusMind,
+
+                    'referral_transaction_id' =>
+                        $referralTransaction?->id,
+
+                    'referrer_new_balance' =>
+                        $referrerNewBalance,
                 ];
             }
         );
@@ -1020,15 +1193,45 @@ class PurchaseService
         );
 
         return [
-            'status'          => true,
-            'message'         => 'Payment verified and MIND credited successfully.',
-            'invoice_id'      => $invoiceId,
-            'tx_hash'         => $txHash,
-            'purchase_id'     => $result['purchase_id'],
-            'transaction_id'  => $result['transaction_id'],
-            'usdt_received'   => $result['usdt_received'],
-            'mind_credited'   => $result['mind_credited'],
-            'new_balance'     => $result['new_balance'],
+            'status' =>
+                true,
+
+            'message' =>
+                'Payment verified and MIND credited successfully.',
+
+            'invoice_id' =>
+                $invoiceId,
+
+            'tx_hash' =>
+                $txHash,
+
+            'purchase_id' =>
+                $result['purchase_id'],
+
+            'transaction_id' =>
+                $result['transaction_id'],
+
+            'usdt_received' =>
+                $result['usdt_received'],
+
+            'mind_credited' =>
+                $result['mind_credited'],
+
+            'new_balance' =>
+                $result['new_balance'],
+
+            'referral_bonus_mind' =>
+                $result['referral_bonus_mind'],
+
+            'referral_transaction_id' =>
+                $result['referral_transaction_id'],
+
+            'referrer_new_balance' =>
+                $result['referrer_new_balance'],
         ];
     }
+
+
+
+
 }
