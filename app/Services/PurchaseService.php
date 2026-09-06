@@ -847,8 +847,6 @@ class PurchaseService
                         'Purchase not found during transaction.'
                     );
                 }
-
-
                 if ($lockedPurchase->status === 'completed') {
 
                     Log::warning(
@@ -865,12 +863,6 @@ class PurchaseService
                     ];
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | Lock User
-                |--------------------------------------------------------------------------
-                */
-
                 $user = User::query()
                     ->where('id', $userId)
                     ->lockForUpdate()
@@ -882,7 +874,6 @@ class PurchaseService
                     );
                 }
 
-
                 $mindToCredit = bcadd(
                     (string) $lockedPurchase->total_mind,
                     '0',
@@ -890,7 +881,11 @@ class PurchaseService
                 );
 
                 if (
-                    bccomp($mindToCredit, '0', 8) <= 0
+                    bccomp(
+                        $mindToCredit,
+                        '0',
+                        8
+                    ) <= 0
                 ) {
 
                     throw new \Exception(
@@ -900,7 +895,9 @@ class PurchaseService
 
 
                 $oldBalance = bcadd(
-                    (string) ($user->mind_balance ?? '0'), '0', 8
+                    (string) ($user->mind_balance ?? '0'),
+                    '0',
+                    8
                 );
 
                 $newBalance = bcadd(
@@ -912,7 +909,6 @@ class PurchaseService
                 $user->mind_balance = $newBalance;
                 $user->save();
 
-
                 $lockedPurchase->update([
                     'tx_hash'       => $txHash,
                     'received_usdt' => $receivedAmount,
@@ -920,7 +916,6 @@ class PurchaseService
                     'completed_at'  => now(),
                     'status'        => 'completed',
                 ]);
-
 
 
                 $transaction = Transaction::query()
@@ -939,8 +934,8 @@ class PurchaseService
                         'amount_usdt'  => $receivedAmount,
                         'rate_applied' => $lockedPurchase->mind_price,
                         'description'  =>
-                            'MIND purchase payment via gateway. TX: ' . $txHash,
-                        'status'       => 'completed',
+                            'MIND purchase payment via gateway. TX: ' .
+                            $txHash,
                         'created_at'   => now(),
                     ]);
 
