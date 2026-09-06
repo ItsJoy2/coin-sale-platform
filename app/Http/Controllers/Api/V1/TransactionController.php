@@ -38,7 +38,7 @@ public function history(Request $request)
             ->where('user_id', $user->id)
             ->with([
                 'purchase:id,invoice_id,tx_hash,payment_address,status,paid_at,completed_at',
-                'sourceUser:id,user_name,wallet_address',
+                'sourceUser:id,name,wallet_address',
             ])
             ->orderByDesc('id');
 
@@ -118,7 +118,7 @@ public function history(Request $request)
                 'source_user' => $transaction->sourceUser
                     ? [
                         'id' => $transaction->sourceUser->id,
-                        'user_name' => $transaction->sourceUser->user_name,
+                        'name' => $transaction->sourceUser->name,
                         'wallet_address' => $transaction->sourceUser->wallet_address,
                     ]
                     : null,
