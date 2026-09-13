@@ -29,6 +29,13 @@
                 Users
             </a>
         </li>
+                <li class="nav-group {{ request()->routeIs('admin.coupons.*') ? 'show' : '' }}">
+
+            <a class="nav-link" href="{{ route('admin.coupons.index') }}">
+                <i class="fas fa-ticket-alt nav-icon"></i>
+                Coupons
+            </a>
+        </li>
         <li class="nav-item">
             <a class="nav-link" href="{{ route('admin.purchases.index') }}">
                 <svg class="nav-icon"
