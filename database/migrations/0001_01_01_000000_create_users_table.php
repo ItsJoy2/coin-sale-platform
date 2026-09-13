@@ -22,6 +22,7 @@ return new class extends Migration
             $table->unsignedBigInteger('referred_id')->nullable();
             $table->decimal('mind_balance', 24, 8)->default(0.00000000);
             $table->enum('role', ['user','admin',])->default('user')->index();
+            $table->rememberToken();
             $table->timestamps();
             $table->foreign('referred_id')->references('id')->on('users')->nullOnDelete();
         });

@@ -20,9 +20,11 @@ class SettingController extends Controller
                     'logo',
                     'favicon',
                 ],
+
                 'referral_commission' => [
                     'referral_bonus_percentage',
                 ],
+
                 'mind' => [
                     'mind_price',
                 ],
@@ -54,8 +56,16 @@ class SettingController extends Controller
                         continue;
                     }
 
-                    $data[$group][$key] =
-                        $settings[$key]->typed_value;
+                    $value = $settings[$key]->typed_value;
+
+                    if (in_array($key, ['logo', 'favicon'], true)) {
+
+                        if (!empty($value)) {
+                            $value = asset('storage/' . ltrim($value, '/'));
+                        }
+                    }
+
+                    $data[$group][$key] = $value;
                 }
             }
 
