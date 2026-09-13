@@ -2,7 +2,6 @@
 <html lang="en">
   <head>
     @php
-    $siteLogo = \App\Models\Setting::where('key', 'logo')->value('value');
     $faviconLogo = \App\Models\Setting::where('key', 'favicon')->value('value');
     @endphp
     <meta charset="utf-8">
