@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\HistoryController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -44,7 +45,17 @@ Route::prefix('admin')->middleware('admin.auth')->name('admin.')->group(function
         Route::get('/', [ SettingsController::class, 'index' ])->name('index');
         Route::put('/', [ SettingsController::class, 'update' ])->name('update');
 
-});
+    });
+    Route::prefix('coupons')->name('coupons.')->group(function () {
+
+        Route::get('/', [CouponController::class, 'index'])->name('index');
+        Route::get('/create', [CouponController::class, 'create'])->name('create');
+        Route::post('/', [CouponController::class, 'store'])->name('store');
+        Route::get('/{coupon}/edit', [CouponController::class, 'edit'])->name('edit');
+        Route::put('/{coupon}', [CouponController::class, 'update'])->name('update');
+        Route::delete('/{coupon}', [CouponController::class, 'destroy'])->name('destroy');
+        Route::patch('/{coupon}/toggle-status', [CouponController::class, 'toggleStatus'])->name('toggle-status');
+    });
 
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 

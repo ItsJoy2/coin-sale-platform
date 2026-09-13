@@ -945,6 +945,49 @@ class PurchaseService
                     'status'        => 'completed',
                 ]);
 
+
+                if (!empty($lockedPurchase->coupon_code)) {
+
+                    $coupon = Coupon::query()
+                        ->whereRaw(
+                            'UPPER(code) = ?',
+                            [strtoupper(trim($lockedPurchase->coupon_code))]
+                        )
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($coupon) {
+
+                        // Safety check
+                        if (
+                            $coupon->max_uses !== null &&
+                            $coupon->used_count >= $coupon->max_uses
+                        ) {
+                            throw new \Exception(
+                                'Coupon usage limit has already been reached.'
+                            );
+                        }
+
+                        $coupon->increment('used_count');
+
+                        Log::info('Coupon usage incremented.', [
+                            'coupon_id'   => $coupon->id,
+                            'coupon_code' => $coupon->code,
+                            'purchase_id' => $lockedPurchase->id,
+                            'user_id'     => $user->id,
+                            'used_count'  => $coupon->used_count,
+                            'max_uses'    => $coupon->max_uses,
+                        ]);
+                    } else {
+
+                        Log::warning('Coupon not found while completing purchase.', [
+                            'coupon_code' => $lockedPurchase->coupon_code,
+                            'purchase_id' => $lockedPurchase->id,
+                            'user_id'     => $user->id,
+                        ]);
+                    }
+                }
+
                 /*
                 |--------------------------------------------------------------------------
                 | Main Purchase Transaction
@@ -1306,41 +1349,18 @@ class PurchaseService
                 Log::info(
                     'Purchase completed successfully.',
                     [
-                        'purchase_id' =>
-                            $lockedPurchase->id,
-
-                        'user_id' =>
-                            $user->id,
-
-                        'invoice_id' =>
-                            $invoiceId,
-
-                        'tx_hash' =>
-                            $txHash,
-
-                        'usdt' =>
-                            $receivedAmount,
-
-                        'mind' =>
-                            $mindToCredit,
-
-                        'old_balance' =>
-                            $oldBalance,
-
-                        'new_balance' =>
-                            $newBalance,
-
-                        'referrer_id' =>
-                            $user->referred_id,
-
-                        'referral_percentage' =>
-                            $referralPercentage,
-
-                        'referral_bonus_mind' =>
-                            $referralBonusMind,
-
-                        'referrer_new_balance' =>
-                            $referrerNewBalance,
+                        'purchase_id' =>$lockedPurchase->id,
+                        'user_id' =>$user->id,
+                        'invoice_id' =>$invoiceId,
+                        'tx_hash' =>$txHash,
+                        'usdt' =>$receivedAmount,
+                        'mind' =>$mindToCredit,
+                        'old_balance' =>$oldBalance,
+                        'new_balance' =>$newBalance,
+                        'referrer_id' =>$user->referred_id,
+                        'referral_percentage' =>$referralPercentage,
+                        'referral_bonus_mind' =>$referralBonusMind,
+                        'referrer_new_balance' =>$referrerNewBalance,
                     ]
                 );
 
