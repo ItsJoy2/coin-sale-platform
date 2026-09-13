@@ -5,7 +5,7 @@
                 $siteLogo = \App\Models\Setting::where('key', 'logo')->value('value');
             @endphp
 
-            <img src="{{ $siteLogo ? asset('storage/' . $siteLogo) : asset('assets/mindchsinwallet.png') }}" alt="Mindchain Logo" class="sidebar-brand-full" height="60" >
+            <img src="{{ $siteLogo ? asset('storage/' . $siteLogo) : asset('assets/mindchsinwallet.png') }}" alt="Mindchain Logo" class="sidebar-brand-full" height="40" >
         </div>
         <button class="btn-close d-lg-none" type="button" data-coreui-theme="dark" aria-label="Close" onclick="coreui.Sidebar.getInstance(document.querySelector('#sidebar')).toggle()"></button>
       </div>
