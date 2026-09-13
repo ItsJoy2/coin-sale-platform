@@ -35,115 +35,133 @@ class SettingsController extends Controller
      */
     public function update(Request $request)
     {
-
-
-        $request->validate([
-            'settings.logo' => ['nullable','image','mimes:png,ico','max:2048', ],
-            'settings.favicon' => ['nullable','file','mimes:png,ico', 'max:1024',],
-        ]);
-
-
         $settings = Setting::query()->get();
-
 
         DB::transaction(function () use ($settings, $request) {
 
             foreach ($settings as $setting) {
 
+                $fieldName = 'settings.' . $setting->key;
 
-                $key = $setting->key;
+                /*
+                |--------------------------------------------------------------------------
+                | File Uploads
+                |--------------------------------------------------------------------------
+                */
+                if (in_array($setting->key, ['logo', 'favicon'], true)) {
 
-
-                if ($key === 'logo') {
-
-                    if ($request->hasFile('settings.logo')) {
-
-                        $file = $request->file('settings.logo');
-
-                        if (
-                            !empty($setting->value) &&
-                            Storage::disk('public')->exists($setting->value)
-                        ) {
-                            Storage::disk('public')->delete(
-                                $setting->value
-                            );
-                        }
-
-                        $path = $file->store(
-                            'logos',
-                            'public'
-                        );
-
-
-                        $setting->value = $path;
-                        $setting->save();
+                    if (!$request->hasFile($fieldName)) {
+                        continue;
                     }
 
+                    $file = $request->file($fieldName);
+
+                    if (!$file || !$file->isValid()) {
+                        continue;
+                    }
+
+                    if ($setting->key === 'logo') {
+
+                        $request->validate([
+                            $fieldName => [
+                                'nullable',
+                                'image',
+                                'mimes:jpg,jpeg,png,webp,svg',
+                                'max:2048',
+                            ],
+                        ]);
+
+                        if (
+                            $setting->value &&
+                            Storage::disk('public')->exists($setting->value)
+                        ) {
+                            Storage::disk('public')->delete($setting->value);
+                        }
+
+                        $value = $file->store('logos', 'public');
+
+                    } else {
+
+                        $request->validate([
+                            $fieldName => [
+                                'nullable',
+                                'file',
+                                'mimes:ico,png,jpg,jpeg,webp',
+                                'max:1024',
+                            ],
+                        ]);
+
+                        if (
+                            $setting->value &&
+                            Storage::disk('public')->exists($setting->value)
+                        ) {
+                            Storage::disk('public')->delete($setting->value);
+                        }
+
+                        $value = $file->store('favicons', 'public');
+                    }
+
+                    $setting->value = $value;
+                    $setting->save();
 
                     continue;
                 }
 
 
-                if ($key === 'favicon') {
-
-                    if ($request->hasFile('settings.favicon')) {
-
-                        $file = $request->file('settings.favicon');
-
-                        if (
-                            !empty($setting->value) &&
-                            Storage::disk('public')->exists($setting->value)
-                        ) {
-                            Storage::disk('public')->delete(
-                                $setting->value
-                            );
-                        }
-
-                        $path = $file->store(
-                            'favicons',
-                            'public'
-                        );
-
-
-                        $setting->value = $path;
-                        $setting->save();
-                    }
-
-                    continue;
-                }
-
-
-                $value = $request->input(
-                    'settings.' . $key
-                );
-
-
+                /*
+                |--------------------------------------------------------------------------
+                | Boolean
+                |--------------------------------------------------------------------------
+                */
                 if ($setting->type === 'boolean') {
 
-                    $value = $request->boolean(
-                        'settings.' . $key
-                    )
+                    $value = $request->boolean($fieldName)
                         ? '1'
                         : '0';
+
+                    $setting->value = $value;
+                    $setting->save();
+
+                    continue;
                 }
 
 
-                elseif ($setting->type === 'string') {
+                /*
+                |--------------------------------------------------------------------------
+                | IMPORTANT
+                | If field is not present in the form, don't update it.
+                |--------------------------------------------------------------------------
+                */
+                if (!$request->has($fieldName)) {
+                    continue;
+                }
+
+
+                $value = $request->input($fieldName);
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | String
+                |--------------------------------------------------------------------------
+                */
+                if ($setting->type === 'string') {
 
                     if (is_array($value)) {
-
                         throw ValidationException::withMessages([
-                            'settings.' . $key => [
-                                'Invalid value.'
-                            ],
+                            $fieldName => ['Invalid value.'],
                         ]);
                     }
 
-                    $value = $value !== null
-                        ? trim((string) $value)
-                        : '';
+                    $value = trim((string) $value);
                 }
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | Decimal
+                |--------------------------------------------------------------------------
+                */
                 elseif ($setting->type === 'decimal') {
 
                     if (
@@ -152,8 +170,8 @@ class SettingsController extends Controller
                         !is_numeric($value)
                     ) {
                         throw ValidationException::withMessages([
-                            'settings.' . $key => [
-                                $key . ' must be a valid number.'
+                            $fieldName => [
+                                $setting->key . ' must be a valid number.'
                             ],
                         ]);
                     }
@@ -166,19 +184,22 @@ class SettingsController extends Controller
                     );
                 }
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | Integer
+                |--------------------------------------------------------------------------
+                */
                 elseif ($setting->type === 'integer') {
 
                     if (
                         $value === null ||
                         $value === '' ||
-                        filter_var(
-                            $value,
-                            FILTER_VALIDATE_INT
-                        ) === false
+                        filter_var($value, FILTER_VALIDATE_INT) === false
                     ) {
                         throw ValidationException::withMessages([
-                            'settings.' . $key => [
-                                $key . ' must be a valid integer.'
+                            $fieldName => [
+                                $setting->key . ' must be a valid integer.'
                             ],
                         ]);
                     }
@@ -186,6 +207,12 @@ class SettingsController extends Controller
                     $value = (string) (int) $value;
                 }
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | JSON
+                |--------------------------------------------------------------------------
+                */
                 elseif ($setting->type === 'json') {
 
                     if (is_array($value)) {
@@ -202,20 +229,25 @@ class SettingsController extends Controller
 
                         json_decode($value, true);
 
-                        if (
-                            json_last_error() !== JSON_ERROR_NONE
-                        ) {
+                        if (json_last_error() !== JSON_ERROR_NONE) {
+
                             throw ValidationException::withMessages([
-                                'settings.' . $key => [
-                                    'Invalid JSON format.'
+                                $fieldName => [
+                                    'Invalid JSON format: ' .
+                                    json_last_error_msg()
                                 ],
                             ]);
                         }
                     }
                 }
 
-                $setting->value = $value;
 
+                /*
+                |--------------------------------------------------------------------------
+                | Save
+                |--------------------------------------------------------------------------
+                */
+                $setting->value = $value;
                 $setting->save();
             }
         });
